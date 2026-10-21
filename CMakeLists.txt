@@ -74,7 +74,7 @@ add_dependencies(ray vvl)
 foreach(shader triangle.vert triangle.frag)
   add_custom_command(
     OUTPUT ${shader}.inc
-    COMMAND glslang-standalone -V -x -o ${shader}.inc
+    COMMAND glslang-standalone -V --target-env vulkan1.4 -x -o ${shader}.inc
             ${CMAKE_CURRENT_SOURCE_DIR}/shaders/${shader}
     DEPENDS shaders/${shader} glslang-standalone)
   target_sources(ray PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${shader}.inc)

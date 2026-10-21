@@ -38,41 +38,34 @@ static void OnFramebufferSize(GLFWwindow* window, int width, int height) {
   *(int*)glfwGetWindowUserPointer(window) = 1;
 }
 
-static VkShaderModule CreateShaderModule(VkDevice device, const uint32_t* code,
-                                         size_t size) {
-  VkShaderModuleCreateInfo info = {
-      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-      .codeSize = size,
-      .pCode = code,
-  };
-  VkShaderModule module;
-  Check(vkCreateShaderModule(device, &info, NULL, &module),
-        "vkCreateShaderModule");
-  return module;
-}
-
 static VkPipeline CreatePipeline(VkDevice device, VkPipelineLayout layout,
                                  VkFormat format) {
-  VkShaderModule vert =
-      CreateShaderModule(device, kTriangleVert, sizeof(kTriangleVert));
-  VkShaderModule frag =
-      CreateShaderModule(device, kTriangleFrag, sizeof(kTriangleFrag));
   VkPipelineShaderStageCreateInfo stages[] = {
       {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+          .pNext =
+              &(VkShaderModuleCreateInfo){
+                  .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                  .codeSize = sizeof(kTriangleVert),
+                  .pCode = kTriangleVert,
+              },
           .stage = VK_SHADER_STAGE_VERTEX_BIT,
-          .module = vert,
           .pName = "main",
       },
       {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+          .pNext =
+              &(VkShaderModuleCreateInfo){
+                  .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                  .codeSize = sizeof(kTriangleFrag),
+                  .pCode = kTriangleFrag,
+              },
           .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-          .module = frag,
           .pName = "main",
       },
   };
-  VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
-                                     VK_DYNAMIC_STATE_SCISSOR};
+  VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT,
+                                     VK_DYNAMIC_STATE_SCISSOR_WITH_COUNT};
   VkGraphicsPipelineCreateInfo info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext =
@@ -97,8 +90,6 @@ static VkPipeline CreatePipeline(VkDevice device, VkPipelineLayout layout,
       .pViewportState =
           &(VkPipelineViewportStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-              .viewportCount = 1,
-              .scissorCount = 1,
           },
       .pRasterizationState =
           &(VkPipelineRasterizationStateCreateInfo){
@@ -134,8 +125,6 @@ static VkPipeline CreatePipeline(VkDevice device, VkPipelineLayout layout,
   Check(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, NULL,
                                   &pipeline),
         "vkCreateGraphicsPipelines");
-  vkDestroyShaderModule(device, frag, NULL);
-  vkDestroyShaderModule(device, vert, NULL);
   return pipeline;
 }
 
@@ -204,11 +193,16 @@ static void CreateSwapchain(VkPhysicalDevice gpu, VkDevice device,
 
 static void Transition(VkCommandBuffer command_buffer, VkImage image,
                        VkImageLayout old_layout, VkImageLayout new_layout) {
-  int to_present = new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-  VkImageMemoryBarrier barrier = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-      .srcAccessMask = to_present ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT : 0,
-      .dstAccessMask = to_present ? 0 : VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+  VkImageMemoryBarrier2 barrier = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+      .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .srcAccessMask = old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                           ? VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+                           : VK_ACCESS_2_NONE,
+      .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .dstAccessMask = new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                           ? VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+                           : VK_ACCESS_2_NONE,
       .oldLayout = old_layout,
       .newLayout = new_layout,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
@@ -221,11 +215,12 @@ static void Transition(VkCommandBuffer command_buffer, VkImage image,
               .layerCount = 1,
           },
   };
-  vkCmdPipelineBarrier(
-      command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      to_present ? VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
-                 : VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      0, 0, NULL, 0, NULL, 1, &barrier);
+  vkCmdPipelineBarrier2(command_buffer,
+                        &(VkDependencyInfo){
+                            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                            .imageMemoryBarrierCount = 1,
+                            .pImageMemoryBarriers = &barrier,
+                        });
 }
 
 int main(void) {
@@ -258,7 +253,7 @@ int main(void) {
       .pApplicationInfo =
           &(VkApplicationInfo){
               .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-              .apiVersion = VK_API_VERSION_1_3,
+              .apiVersion = VK_API_VERSION_1_4,
           },
       .enabledExtensionCount = extension_count,
       .ppEnabledExtensionNames = extensions,
@@ -285,8 +280,8 @@ int main(void) {
   }
   VkPhysicalDeviceProperties properties;
   vkGetPhysicalDeviceProperties(gpu, &properties);
-  if (properties.apiVersion < VK_API_VERSION_1_3) {
-    Fail("vulkan 1.3 required");
+  if (properties.apiVersion < VK_API_VERSION_1_4) {
+    Fail("vulkan 1.4 required");
   }
   printf("%s\n", properties.deviceName);
 
@@ -313,6 +308,13 @@ int main(void) {
       .pNext =
           &(VkPhysicalDeviceVulkan13Features){
               .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+              .pNext =
+                  &(VkPhysicalDeviceVulkan14Features){
+                      .sType =
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+                      .maintenance5 = VK_TRUE,
+                  },
+              .synchronization2 = VK_TRUE,
               .dynamicRendering = VK_TRUE,
           },
       .queueCreateInfoCount = 1,
@@ -451,14 +453,14 @@ int main(void) {
         });
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       pipeline);
-    vkCmdSetViewport(command_buffer, 0, 1,
-                     &(VkViewport){
-                         .width = (float)swapchain.extent.width,
-                         .height = (float)swapchain.extent.height,
-                         .maxDepth = 1.0f,
-                     });
-    vkCmdSetScissor(command_buffer, 0, 1,
-                    &(VkRect2D){.extent = swapchain.extent});
+    vkCmdSetViewportWithCount(command_buffer, 1,
+                              &(VkViewport){
+                                  .width = (float)swapchain.extent.width,
+                                  .height = (float)swapchain.extent.height,
+                                  .maxDepth = 1.0f,
+                              });
+    vkCmdSetScissorWithCount(command_buffer, 1,
+                             &(VkRect2D){.extent = swapchain.extent});
     vkCmdDraw(command_buffer, 3, 1, 0, 0);
     vkCmdEndRendering(command_buffer);
     Transition(command_buffer, swapchain.images[index],
@@ -466,19 +468,30 @@ int main(void) {
                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
     Check(vkEndCommandBuffer(command_buffer), "vkEndCommandBuffer");
 
-    VkPipelineStageFlags wait_stage =
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSubmitInfo submit_info = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &acquired,
-        .pWaitDstStageMask = &wait_stage,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &command_buffer,
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &rendered[index],
+    VkSubmitInfo2 submit_info = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        .waitSemaphoreInfoCount = 1,
+        .pWaitSemaphoreInfos =
+            &(VkSemaphoreSubmitInfo){
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = acquired,
+                .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            },
+        .commandBufferInfoCount = 1,
+        .pCommandBufferInfos =
+            &(VkCommandBufferSubmitInfo){
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                .commandBuffer = command_buffer,
+            },
+        .signalSemaphoreInfoCount = 1,
+        .pSignalSemaphoreInfos =
+            &(VkSemaphoreSubmitInfo){
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = rendered[index],
+                .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            },
     };
-    Check(vkQueueSubmit(queue, 1, &submit_info, fence), "vkQueueSubmit");
+    Check(vkQueueSubmit2(queue, 1, &submit_info, fence), "vkQueueSubmit2");
     VkPresentInfoKHR present_info = {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
