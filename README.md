@@ -8,4 +8,4 @@ cmake --build build
 cmake --build build --target run
 ```
 
-On Linux, GLFW and the validation layers also need the X11 and Wayland development packages.
+On Linux, GLFW and the Vulkan validation layers also need the X11 and Wayland development packages.
