@@ -47,6 +47,7 @@ int main(void) {
     return EXIT_FAILURE;
   }
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
   GLFWwindow* window = glfwCreateWindow(1280, 720, "ray", NULL, NULL);
   uint32_t extension_count = 0;
   const char** extensions = glfwGetRequiredInstanceExtensions(&extension_count);
