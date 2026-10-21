@@ -10,51 +10,43 @@ include(FetchContent)
 
 FetchContent_Declare(
   VulkanHeaders
-  GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
-  GIT_TAG ${RAY_VULKAN_TAG}
-  GIT_SHALLOW TRUE
+  URL https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/${RAY_VULKAN_TAG}.tar.gz
+  URL_HASH SHA256=4a078be12bef21cfebc09d878b77a63cff9d68f899254a0b00d0e37ef73e7f7e
   EXCLUDE_FROM_ALL SYSTEM OVERRIDE_FIND_PACKAGE)
 FetchContent_Declare(
   VulkanUtilityLibraries
-  GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Utility-Libraries.git
-  GIT_TAG ${RAY_VULKAN_TAG}
-  GIT_SHALLOW TRUE
+  URL https://github.com/KhronosGroup/Vulkan-Utility-Libraries/archive/refs/tags/${RAY_VULKAN_TAG}.tar.gz
+  URL_HASH SHA256=a5308b62e3bac84cf45c4d7dd5b830aabace4847fdb71f4fd7db3be034c2bebf
   EXCLUDE_FROM_ALL SYSTEM OVERRIDE_FIND_PACKAGE)
 FetchContent_Declare(
   SPIRV-Headers
-  GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Headers.git
-  GIT_TAG ${RAY_VULKAN_TAG}
-  GIT_SHALLOW TRUE
+  URL https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/${RAY_VULKAN_TAG}.tar.gz
+  URL_HASH SHA256=5b3a0d099f5c7649e29c0938476c462e71d66ad89a0bde42fa1ba3eb476956c9
   EXCLUDE_FROM_ALL SYSTEM OVERRIDE_FIND_PACKAGE)
 FetchContent_Declare(
   SPIRV-Tools
-  GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Tools.git
-  GIT_TAG ${RAY_VULKAN_TAG}
-  GIT_SHALLOW TRUE
+  URL https://github.com/KhronosGroup/SPIRV-Tools/archive/refs/tags/${RAY_VULKAN_TAG}.tar.gz
+  URL_HASH SHA256=e6c83a215538fbfd265ccf398d3877985055df1273dbed73912bd05307664688
   EXCLUDE_FROM_ALL SYSTEM)
 FetchContent_Declare(
   glslang
-  GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
-  GIT_TAG ${RAY_VULKAN_TAG}
-  GIT_SHALLOW TRUE
+  URL https://github.com/KhronosGroup/glslang/archive/refs/tags/${RAY_VULKAN_TAG}.tar.gz
+  URL_HASH SHA256=cda24ec765e6d2845d106b7caa593f34127195a88524cf87821ff0088fb6edec
   EXCLUDE_FROM_ALL SYSTEM)
 FetchContent_Declare(
   VulkanValidationLayers
-  GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-ValidationLayers.git
-  GIT_TAG ${RAY_VULKAN_TAG}
-  GIT_SHALLOW TRUE
+  URL https://github.com/KhronosGroup/Vulkan-ValidationLayers/archive/refs/tags/${RAY_VULKAN_TAG}.tar.gz
+  URL_HASH SHA256=36720627913a591ae8ffc0f24b3c04f98af65242c9b7215d1944a85ff5b70e00
   EXCLUDE_FROM_ALL SYSTEM)
 FetchContent_Declare(
   volk
-  GIT_REPOSITORY https://github.com/zeux/volk.git
-  GIT_TAG ${RAY_VULKAN_TAG}
-  GIT_SHALLOW TRUE
+  URL https://github.com/zeux/volk/archive/refs/tags/${RAY_VULKAN_TAG}.tar.gz
+  URL_HASH SHA256=1547d8d74395d4048fb3f4a6313da56db626e89b55db238d0d7e8944c8a645f3
   EXCLUDE_FROM_ALL SYSTEM)
 FetchContent_Declare(
   glfw
-  GIT_REPOSITORY https://github.com/glfw/glfw.git
-  GIT_TAG 3.5.1
-  GIT_SHALLOW TRUE
+  URL https://github.com/glfw/glfw/archive/refs/tags/3.5.1.tar.gz
+  URL_HASH SHA256=5234f4f29473e9a06bc7847d8371858dd135d38466eeeaa652fdc9f8f9ff0c20
   EXCLUDE_FROM_ALL SYSTEM)
 
 FetchContent_MakeAvailable(

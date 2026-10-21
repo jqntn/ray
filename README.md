@@ -1,6 +1,6 @@
 # ray
 
-Requires CMake 3.28+, Git, Python 3 and a C/C++ compiler. Everything else is fetched and built by CMake.
+Requires CMake 3.28+, Python 3 and a C/C++ compiler. Everything else is fetched and built by CMake.
 
 ```sh
 cmake -B build
