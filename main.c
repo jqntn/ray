@@ -41,6 +41,7 @@ int main(void) {
 #endif
 #endif
   Check(volkInitialize(), "volkInitialize");
+  glfwInitVulkanLoader(vkGetInstanceProcAddr);
   if (!glfwInit()) {
     fprintf(stderr, "glfwInit failed\n");
     return EXIT_FAILURE;
