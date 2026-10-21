@@ -224,13 +224,6 @@ static void Transition(VkCommandBuffer command_buffer, VkImage image,
 }
 
 int main(void) {
-#ifndef NDEBUG
-#ifdef _WIN32
-  _putenv_s("VK_ADD_LAYER_PATH", RAY_LAYER_PATH);
-#else
-  setenv("VK_ADD_LAYER_PATH", RAY_LAYER_PATH, 1);
-#endif
-#endif
   Check(volkInitialize(), "volkInitialize");
   glfwInitVulkanLoader(vkGetInstanceProcAddr);
   if (!glfwInit()) {
@@ -264,7 +257,13 @@ int main(void) {
   instance_info.ppEnabledLayerNames = &layer;
 #endif
   VkInstance instance;
-  Check(vkCreateInstance(&instance_info, NULL, &instance), "vkCreateInstance");
+  VkResult result = vkCreateInstance(&instance_info, NULL, &instance);
+  if (result == VK_ERROR_LAYER_NOT_PRESENT) {
+    fprintf(stderr, "validation layer not found\n");
+    instance_info.enabledLayerCount = 0;
+    result = vkCreateInstance(&instance_info, NULL, &instance);
+  }
+  Check(result, "vkCreateInstance");
   volkLoadInstance(instance);
 
   VkSurfaceKHR surface;
@@ -416,8 +415,8 @@ int main(void) {
     Check(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX),
           "vkWaitForFences");
     uint32_t index;
-    VkResult result = vkAcquireNextImageKHR(
-        device, swapchain.handle, UINT64_MAX, acquired, VK_NULL_HANDLE, &index);
+    result = vkAcquireNextImageKHR(device, swapchain.handle, UINT64_MAX,
+                                   acquired, VK_NULL_HANDLE, &index);
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
       recreate = 1;
       continue;

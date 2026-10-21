@@ -64,12 +64,17 @@ FetchContent_MakeAvailable(
 target_link_libraries(volk PUBLIC Vulkan::Headers)
 
 add_executable(ray main.c)
-target_compile_definitions(
-  ray PRIVATE GLFW_INCLUDE_VULKAN VK_NO_PROTOTYPES
-              "RAY_LAYER_PATH=\"$<TARGET_FILE_DIR:vvl>\"")
+target_compile_definitions(ray PRIVATE GLFW_INCLUDE_VULKAN VK_NO_PROTOTYPES)
 target_include_directories(ray PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(ray PRIVATE glfw volk)
 add_dependencies(ray vvl)
+
+add_custom_target(
+  run
+  COMMAND ${CMAKE_COMMAND} -E env VK_ADD_LAYER_PATH=$<TARGET_FILE_DIR:vvl>
+          $<TARGET_FILE:ray>
+  USES_TERMINAL)
+add_dependencies(run ray)
 
 foreach(shader triangle.vert triangle.frag)
   add_custom_command(
