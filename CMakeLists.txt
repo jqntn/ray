@@ -55,7 +55,7 @@ FetchContent_MakeAvailable(
 
 target_link_libraries(volk PUBLIC Vulkan::Headers)
 
-add_executable(ray main.c)
+add_executable(ray src/main.c)
 set_target_properties(ray PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON
                                      C_EXTENSIONS OFF)
 target_compile_definitions(ray PRIVATE GLFW_INCLUDE_VULKAN VK_NO_PROTOTYPES)
