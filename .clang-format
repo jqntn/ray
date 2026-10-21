@@ -1,2 +1,3 @@
-BasedOnStyle: Mozilla
+BasedOnStyle: Google
+DerivePointerAlignment: false
 InsertBraces: true
