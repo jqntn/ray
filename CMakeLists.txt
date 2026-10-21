@@ -69,14 +69,13 @@ set_target_properties(ray PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON
 target_compile_definitions(ray PRIVATE GLFW_INCLUDE_VULKAN VK_NO_PROTOTYPES)
 target_include_directories(ray PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(ray PRIVATE glfw volk)
-add_dependencies(ray vvl)
 
 add_custom_target(
   run
   COMMAND ${CMAKE_COMMAND} -E env VK_ADD_LAYER_PATH=$<TARGET_FILE_DIR:vvl>
           $<TARGET_FILE:ray>
   USES_TERMINAL)
-add_dependencies(run ray)
+add_dependencies(run ray vvl)
 
 foreach(shader triangle.vert triangle.frag)
   add_custom_command(
