@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <volk.h>
 
 enum { kMaxImages = 8 };
@@ -13,7 +12,6 @@ typedef struct Swapchain {
   uint32_t image_count;
   VkImage images[kMaxImages];
   VkImageView views[kMaxImages];
-  VkFence presented[kMaxImages];
 } Swapchain;
 
 static const uint32_t kTriangleVert[] = {
@@ -38,24 +36,6 @@ static void Check(VkResult result, const char* call) {
 
 static void OnFramebufferSize(GLFWwindow* window, int width, int height) {
   *(int*)glfwGetWindowUserPointer(window) = 1;
-}
-
-static int Supports(VkPhysicalDevice gpu, const char* name) {
-  static VkExtensionProperties extensions[512];
-  uint32_t count = 512;
-  if (gpu == VK_NULL_HANDLE) {
-    Check(vkEnumerateInstanceExtensionProperties(NULL, &count, extensions),
-          "vkEnumerateInstanceExtensionProperties");
-  } else {
-    Check(vkEnumerateDeviceExtensionProperties(gpu, NULL, &count, extensions),
-          "vkEnumerateDeviceExtensionProperties");
-  }
-  for (uint32_t i = 0; i < count; ++i) {
-    if (strcmp(extensions[i].extensionName, name) == 0) {
-      return 1;
-    }
-  }
-  return 0;
 }
 
 static VkPipeline CreatePipeline(VkDevice device, VkPipelineLayout layout,
@@ -148,10 +128,16 @@ static VkPipeline CreatePipeline(VkDevice device, VkPipelineLayout layout,
   return pipeline;
 }
 
+static void DestroySwapchain(VkDevice device, const Swapchain* swapchain) {
+  for (uint32_t i = 0; i < swapchain->image_count; ++i) {
+    vkDestroyImageView(device, swapchain->views[i], NULL);
+  }
+  vkDestroySwapchainKHR(device, swapchain->handle, NULL);
+}
+
 static void CreateSwapchain(VkPhysicalDevice gpu, VkDevice device,
                             VkSurfaceKHR surface, VkSurfaceFormatKHR format,
-                            VkExtent2D framebuffer, VkSwapchainKHR old,
-                            int present_fences, Swapchain* swapchain) {
+                            VkExtent2D framebuffer, Swapchain* swapchain) {
   VkSurfaceCapabilitiesKHR capabilities;
   Check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &capabilities),
         "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
@@ -160,7 +146,7 @@ static void CreateSwapchain(VkPhysicalDevice gpu, VkDevice device,
       image_count > capabilities.maxImageCount) {
     image_count = capabilities.maxImageCount;
   }
-  *swapchain = (Swapchain){0};
+  Swapchain old = *swapchain;
   swapchain->extent = capabilities.currentExtent.width == UINT32_MAX
                           ? framebuffer
                           : capabilities.currentExtent;
@@ -177,10 +163,11 @@ static void CreateSwapchain(VkPhysicalDevice gpu, VkDevice device,
       .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
       .presentMode = VK_PRESENT_MODE_FIFO_KHR,
       .clipped = VK_TRUE,
-      .oldSwapchain = old,
+      .oldSwapchain = old.handle,
   };
   Check(vkCreateSwapchainKHR(device, &info, NULL, &swapchain->handle),
         "vkCreateSwapchainKHR");
+  DestroySwapchain(device, &old);
   Check(vkGetSwapchainImagesKHR(device, swapchain->handle,
                                 &swapchain->image_count, NULL),
         "vkGetSwapchainImagesKHR");
@@ -205,30 +192,7 @@ static void CreateSwapchain(VkPhysicalDevice gpu, VkDevice device,
     };
     Check(vkCreateImageView(device, &view_info, NULL, &swapchain->views[i]),
           "vkCreateImageView");
-    if (present_fences) {
-      Check(vkCreateFence(device,
-                          &(VkFenceCreateInfo){
-                              .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                              .flags = VK_FENCE_CREATE_SIGNALED_BIT,
-                          },
-                          NULL, &swapchain->presented[i]),
-            "vkCreateFence");
-    }
   }
-}
-
-static void DestroySwapchain(VkDevice device, Swapchain* swapchain) {
-  if (swapchain->presented[0] != VK_NULL_HANDLE) {
-    Check(vkWaitForFences(device, swapchain->image_count, swapchain->presented,
-                          VK_TRUE, UINT64_MAX),
-          "vkWaitForFences");
-  }
-  for (uint32_t i = 0; i < swapchain->image_count; ++i) {
-    vkDestroyFence(device, swapchain->presented[i], NULL);
-    vkDestroyImageView(device, swapchain->views[i], NULL);
-  }
-  vkDestroySwapchainKHR(device, swapchain->handle, NULL);
-  *swapchain = (Swapchain){0};
 }
 
 static void Transition(VkCommandBuffer command_buffer, VkImage image,
@@ -288,14 +252,10 @@ int main(void) {
   for (uint32_t i = 0; i < extension_count; ++i) {
     instance_extensions[i] = extensions[i];
   }
-  int maintenance1 =
-      Supports(VK_NULL_HANDLE, VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
-  if (maintenance1) {
-    instance_extensions[extension_count++] =
-        VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME;
-    instance_extensions[extension_count++] =
-        VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME;
-  }
+  instance_extensions[extension_count++] =
+      VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME;
+  instance_extensions[extension_count++] =
+      VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME;
 
   VkInstanceCreateInfo instance_info = {
       .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -347,8 +307,6 @@ int main(void) {
     Fail("vulkan 1.4 required");
   }
   printf("%s\n", properties.deviceName);
-  maintenance1 = maintenance1 &&
-                 Supports(gpu, VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME);
 
   VkQueueFamilyProperties families[32];
   uint32_t family_count = 32;
@@ -381,13 +339,11 @@ int main(void) {
                       .sType =
                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
                       .pNext =
-                          maintenance1
-                              ? &(VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR){
-                                    .sType =
-                                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR,
-                                    .swapchainMaintenance1 = VK_TRUE,
-                                }
-                              : NULL,
+                          &(VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR){
+                              .sType =
+                                  VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR,
+                              .swapchainMaintenance1 = VK_TRUE,
+                          },
                       .maintenance5 = VK_TRUE,
                   },
               .synchronization2 = VK_TRUE,
@@ -401,7 +357,7 @@ int main(void) {
               .queueCount = 1,
               .pQueuePriorities = &priority,
           },
-      .enabledExtensionCount = maintenance1 ? 2 : 1,
+      .enabledExtensionCount = 2,
       .ppEnabledExtensionNames = device_extensions,
   };
   VkDevice device;
@@ -418,11 +374,9 @@ int main(void) {
   int width;
   int height;
   glfwGetFramebufferSize(window, &width, &height);
-  Swapchain swapchain;
-  Swapchain retired = {0};
+  Swapchain swapchain = {0};
   CreateSwapchain(gpu, device, surface, format,
-                  (VkExtent2D){(uint32_t)width, (uint32_t)height},
-                  VK_NULL_HANDLE, maintenance1, &swapchain);
+                  (VkExtent2D){(uint32_t)width, (uint32_t)height}, &swapchain);
 
   VkPipelineLayout layout;
   Check(vkCreatePipelineLayout(
@@ -462,19 +416,18 @@ int main(void) {
   VkSemaphore acquired;
   Check(vkCreateSemaphore(device, &semaphore_info, NULL, &acquired),
         "vkCreateSemaphore");
-  VkSemaphore rendered[kMaxImages];
-  for (int i = 0; i < kMaxImages; ++i) {
-    Check(vkCreateSemaphore(device, &semaphore_info, NULL, &rendered[i]),
-          "vkCreateSemaphore");
-  }
-  VkFence fence;
-  Check(vkCreateFence(device,
-                      &(VkFenceCreateInfo){
-                          .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                          .flags = VK_FENCE_CREATE_SIGNALED_BIT,
-                      },
-                      NULL, &fence),
-        "vkCreateFence");
+  VkSemaphore rendered;
+  Check(vkCreateSemaphore(device, &semaphore_info, NULL, &rendered),
+        "vkCreateSemaphore");
+  VkFenceCreateInfo fence_info = {
+      .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+      .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+  };
+  VkFence submitted;
+  Check(vkCreateFence(device, &fence_info, NULL, &submitted), "vkCreateFence");
+  VkFence presented;
+  Check(vkCreateFence(device, &fence_info, NULL, &presented), "vkCreateFence");
+  VkFence fences[] = {submitted, presented};
 
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
@@ -483,28 +436,15 @@ int main(void) {
       glfwWaitEvents();
       continue;
     }
+    Check(vkWaitForFences(device, 2, fences, VK_TRUE, UINT64_MAX),
+          "vkWaitForFences");
     if (recreate) {
-      if (!maintenance1) {
-        Check(vkDeviceWaitIdle(device), "vkDeviceWaitIdle");
-      }
-      DestroySwapchain(device, &retired);
-      retired = swapchain;
       CreateSwapchain(gpu, device, surface, format,
                       (VkExtent2D){(uint32_t)width, (uint32_t)height},
-                      retired.handle, maintenance1, &swapchain);
-      if (!maintenance1) {
-        DestroySwapchain(device, &retired);
-      }
+                      &swapchain);
       recreate = 0;
     }
-    if (retired.handle != VK_NULL_HANDLE &&
-        vkWaitForFences(device, retired.image_count, retired.presented, VK_TRUE,
-                        0) == VK_SUCCESS) {
-      DestroySwapchain(device, &retired);
-    }
 
-    Check(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX),
-          "vkWaitForFences");
     uint32_t index;
     result = vkAcquireNextImageKHR(device, swapchain.handle, UINT64_MAX,
                                    acquired, VK_NULL_HANDLE, &index);
@@ -513,7 +453,7 @@ int main(void) {
       continue;
     }
     Check(result, "vkAcquireNextImageKHR");
-    Check(vkResetFences(device, 1, &fence), "vkResetFences");
+    Check(vkResetFences(device, 2, fences), "vkResetFences");
 
     Check(vkBeginCommandBuffer(
               command_buffer,
@@ -577,29 +517,21 @@ int main(void) {
         .pSignalSemaphoreInfos =
             &(VkSemaphoreSubmitInfo){
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = rendered[index],
+                .semaphore = rendered,
                 .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
             },
     };
-    Check(vkQueueSubmit2(queue, 1, &submit_info, fence), "vkQueueSubmit2");
-    if (maintenance1) {
-      Check(vkWaitForFences(device, 1, &swapchain.presented[index], VK_TRUE,
-                            UINT64_MAX),
-            "vkWaitForFences");
-      Check(vkResetFences(device, 1, &swapchain.presented[index]),
-            "vkResetFences");
-    }
+    Check(vkQueueSubmit2(queue, 1, &submit_info, submitted), "vkQueueSubmit2");
     VkPresentInfoKHR present_info = {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .pNext = maintenance1 ? &(VkSwapchainPresentFenceInfoKHR){
-                                    .sType =
-                                        VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR,
-                                    .swapchainCount = 1,
-                                    .pFences = &swapchain.presented[index],
-                                }
-                              : NULL,
+        .pNext =
+            &(VkSwapchainPresentFenceInfoKHR){
+                .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR,
+                .swapchainCount = 1,
+                .pFences = &presented,
+            },
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &rendered[index],
+        .pWaitSemaphores = &rendered,
         .swapchainCount = 1,
         .pSwapchains = &swapchain.handle,
         .pImageIndices = &index,
@@ -612,13 +544,12 @@ int main(void) {
     }
   }
 
-  Check(vkDeviceWaitIdle(device), "vkDeviceWaitIdle");
-  DestroySwapchain(device, &retired);
+  Check(vkWaitForFences(device, 2, fences, VK_TRUE, UINT64_MAX),
+        "vkWaitForFences");
   DestroySwapchain(device, &swapchain);
-  vkDestroyFence(device, fence, NULL);
-  for (int i = 0; i < kMaxImages; ++i) {
-    vkDestroySemaphore(device, rendered[i], NULL);
-  }
+  vkDestroyFence(device, presented, NULL);
+  vkDestroyFence(device, submitted, NULL);
+  vkDestroySemaphore(device, rendered, NULL);
   vkDestroySemaphore(device, acquired, NULL);
   vkDestroyCommandPool(device, pool, NULL);
   vkDestroyPipeline(device, pipeline, NULL);
