@@ -5,7 +5,9 @@
 #include <volk.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-enum { kMaxImages = 8, kMaxInstanceExtensions = 16 };
+#define RAY_COUNT(array) ((uint32_t)(sizeof(array) / sizeof((array)[0])))
+
+enum { kMaxImages = 8 };
 
 typedef struct Swapchain {
   VkSwapchainKHR handle;
@@ -86,7 +88,7 @@ static VkPipeline CreatePipeline(VkDevice device, VkPipelineLayout layout,
               .colorAttachmentCount = 1,
               .pColorAttachmentFormats = &format,
           },
-      .stageCount = 2,
+      .stageCount = RAY_COUNT(stages),
       .pStages = stages,
       .pVertexInputState =
           &(VkPipelineVertexInputStateCreateInfo){
@@ -128,7 +130,7 @@ static VkPipeline CreatePipeline(VkDevice device, VkPipelineLayout layout,
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 2,
+              .dynamicStateCount = RAY_COUNT(dynamic_states),
               .pDynamicStates = dynamic_states,
           },
       .layout = layout,
@@ -257,7 +259,7 @@ int main(void) {
   glfwSetWindowUserPointer(window, &recreate);
   glfwSetFramebufferSizeCallback(window, OnFramebufferSize);
 
-  const char* instance_extensions[kMaxInstanceExtensions] = {
+  const char* instance_extensions[16] = {
       VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME,
       VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
       VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
@@ -267,7 +269,7 @@ int main(void) {
     ++instance_extension_count;
   }
   for (uint32_t i = 0; i < extension_count; ++i) {
-    if (instance_extension_count == kMaxInstanceExtensions) {
+    if (instance_extension_count == RAY_COUNT(instance_extensions)) {
       Fail("too many instance extensions");
     }
     instance_extensions[instance_extension_count++] = extensions[i];
@@ -317,7 +319,7 @@ int main(void) {
         "glfwCreateWindowSurface");
 
   VkPhysicalDevice gpus[16];
-  uint32_t gpu_count = 16;
+  uint32_t gpu_count = RAY_COUNT(gpus);
   Check(vkEnumeratePhysicalDevices(instance, &gpu_count, gpus),
         "vkEnumeratePhysicalDevices");
   if (gpu_count == 0) {
@@ -339,7 +341,7 @@ int main(void) {
   printf("%s\n", properties.deviceName);
 
   VkQueueFamilyProperties families[32];
-  uint32_t family_count = 32;
+  uint32_t family_count = RAY_COUNT(families);
   vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
   uint32_t family = UINT32_MAX;
   for (uint32_t i = 0; i < family_count && family == UINT32_MAX; ++i) {
@@ -387,7 +389,7 @@ int main(void) {
               .queueCount = 1,
               .pQueuePriorities = &priority,
           },
-      .enabledExtensionCount = 2,
+      .enabledExtensionCount = RAY_COUNT(device_extensions),
       .ppEnabledExtensionNames = device_extensions,
   };
   VkDevice device;
@@ -469,8 +471,9 @@ int main(void) {
       glfwWaitEvents();
       continue;
     }
-    Check(vkWaitForFences(device, 2, fences, VK_TRUE, UINT64_MAX),
-          "vkWaitForFences");
+    Check(
+        vkWaitForFences(device, RAY_COUNT(fences), fences, VK_TRUE, UINT64_MAX),
+        "vkWaitForFences");
     if (recreate) {
       CreateSwapchain(gpu, device, surface, format,
                       (VkExtent2D){(uint32_t)width, (uint32_t)height},
@@ -486,7 +489,7 @@ int main(void) {
       continue;
     }
     Check(result, "vkAcquireNextImageKHR");
-    Check(vkResetFences(device, 2, fences), "vkResetFences");
+    Check(vkResetFences(device, RAY_COUNT(fences), fences), "vkResetFences");
 
     Check(vkBeginCommandBuffer(
               command_buffer,
@@ -577,7 +580,7 @@ int main(void) {
     }
   }
 
-  Check(vkWaitForFences(device, 2, fences, VK_TRUE, UINT64_MAX),
+  Check(vkWaitForFences(device, RAY_COUNT(fences), fences, VK_TRUE, UINT64_MAX),
         "vkWaitForFences");
   DestroySwapchain(device, &swapchain);
   vkDestroyFence(device, presented, NULL);
