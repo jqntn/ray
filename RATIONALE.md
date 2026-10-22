@@ -71,8 +71,21 @@ ray is a minimal Vulkan engine in plain C. Its goal is a ray/path traced engine 
 | `VK_EXT_shader_object` | A path tracer has no pipeline explosion. Compute shaders have no draw state, and the extension does not support ray tracing shaders. |
 | Fallbacks for missing extensions | They contradict "latest drivers". |
 | EXT names of promoted extensions | Current drivers expose the KHR name. Both names need extra code for old drivers only. |
-| MAILBOX present mode | Uses more power. Use it only if latency matters more. |
 | Mozilla style | Google naming is complete, and clang-tidy enforces all of it. ray keeps the mandatory braces from Mozilla. |
+
+## Deferred
+
+These options are not rejected. Each waits for its trigger. Direction and Limitations list the other deferred items.
+
+| Option | Trigger |
+|---|---|
+| MAILBOX present mode | Latency matters more than power. MAILBOX renders frames that the screen never shows, and not every platform has it. |
+| More than one frame in flight | The CPU waits idle on GPU work. |
+| More swapchain_maintenance1 features | ray needs a vsync toggle, scaling during a resize or swapchain memory on first use. |
+| Debug messenger (`VK_EXT_debug_utils`) | You need breakpoints on validation errors or object names in tools. |
+| Validation in the IDE debugger | You debug in an IDE. Today only the `run` target enables validation. |
+| `CMAKE_INTERMEDIATE_DIR_STRATEGY SHORT` | A build hits the Windows path limit again. |
+| GPU choice by Vulkan 1.4 support | A discrete GPU without Vulkan 1.4 hides an integrated GPU with it. |
 
 ## Direction: path tracing
 
