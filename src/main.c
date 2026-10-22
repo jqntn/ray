@@ -270,14 +270,22 @@ int main(void) {
   Check(glfwCreateWindowSurface(instance, window, NULL, &surface),
         "glfwCreateWindowSurface");
 
-  uint32_t gpu_count = 1;
-  VkPhysicalDevice gpu = VK_NULL_HANDLE;
-  Check(vkEnumeratePhysicalDevices(instance, &gpu_count, &gpu),
+  VkPhysicalDevice gpus[16];
+  uint32_t gpu_count = 16;
+  Check(vkEnumeratePhysicalDevices(instance, &gpu_count, gpus),
         "vkEnumeratePhysicalDevices");
   if (gpu_count == 0) {
     Fail("no vulkan device");
   }
+  VkPhysicalDevice gpu = gpus[0];
   VkPhysicalDeviceProperties properties;
+  for (uint32_t i = 0; i < gpu_count; ++i) {
+    vkGetPhysicalDeviceProperties(gpus[i], &properties);
+    if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+      gpu = gpus[i];
+      break;
+    }
+  }
   vkGetPhysicalDeviceProperties(gpu, &properties);
   if (properties.apiVersion < VK_API_VERSION_1_4) {
     Fail("vulkan 1.4 required");
