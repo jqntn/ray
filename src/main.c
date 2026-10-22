@@ -268,10 +268,11 @@ int main(void) {
   while (instance_extensions[instance_extension_count]) {
     ++instance_extension_count;
   }
+  if (instance_extension_count + extension_count >
+      RAY_COUNT(instance_extensions)) {
+    Fail("too many instance extensions");
+  }
   for (uint32_t i = 0; i < extension_count; ++i) {
-    if (instance_extension_count == RAY_COUNT(instance_extensions)) {
-      Fail("too many instance extensions");
-    }
     instance_extensions[instance_extension_count++] = extensions[i];
   }
 
