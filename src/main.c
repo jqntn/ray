@@ -5,7 +5,7 @@
 #include <volk.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-enum { kMaxImages = 8 };
+enum { kMaxImages = 8, kMaxInstanceExtensions = 16 };
 
 typedef struct Swapchain {
   VkSwapchainKHR handle;
@@ -257,18 +257,21 @@ int main(void) {
   glfwSetWindowUserPointer(window, &recreate);
   glfwSetFramebufferSizeCallback(window, OnFramebufferSize);
 
-  const char* instance_extensions[16];
-  if (extension_count > 13) {
-    Fail("too many instance extensions");
+  const char* instance_extensions[kMaxInstanceExtensions] = {
+      VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME,
+      VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
+      VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+  };
+  uint32_t instance_extension_count = 0;
+  while (instance_extensions[instance_extension_count]) {
+    ++instance_extension_count;
   }
   for (uint32_t i = 0; i < extension_count; ++i) {
-    instance_extensions[i] = extensions[i];
+    if (instance_extension_count == kMaxInstanceExtensions) {
+      Fail("too many instance extensions");
+    }
+    instance_extensions[instance_extension_count++] = extensions[i];
   }
-  instance_extensions[extension_count++] =
-      VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME;
-  instance_extensions[extension_count++] =
-      VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME;
-  instance_extensions[extension_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 
   int validation_error = 0;
   VkDebugUtilsMessengerCreateInfoEXT messenger_info = {
@@ -287,7 +290,7 @@ int main(void) {
               .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
               .apiVersion = VK_API_VERSION_1_4,
           },
-      .enabledExtensionCount = extension_count,
+      .enabledExtensionCount = instance_extension_count,
       .ppEnabledExtensionNames = instance_extensions,
   };
 #ifndef NDEBUG
