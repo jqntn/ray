@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <volk.h>
+#include <vulkan/vk_enum_string_helper.h>
 
 enum { kMaxImages = 8 };
 
@@ -29,7 +30,7 @@ static void Fail(const char* message) {
 
 static void Check(VkResult result, const char* call) {
   if (result < 0) {
-    fprintf(stderr, "%s failed: %d\n", call, result);
+    fprintf(stderr, "%s failed: %s\n", call, string_VkResult(result));
     exit(EXIT_FAILURE);
   }
 }
