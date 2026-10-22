@@ -1,93 +1,92 @@
 # Rationale
 
-ray is a minimal Vulkan engine in plain C, growing toward a ray/path traced engine for games. This file records the philosophy and the decisions behind the code so future changes stay consistent with them.
+ray is a minimal Vulkan engine in plain C. Its goal is a ray/path traced engine for games. This file records the design rules. Follow them in every change.
 
-## Philosophy
+## Principles
 
-- **Ultra simple.** The smallest code that fully does the job. No abstraction, option or helper until something needs it. Prefer deleting code to adding it.
-- **Latest drivers, newest features.** Assume an up-to-date driver and a current GPU. Use the newest core Vulkan (1.4) and newest extensions directly. No fallback paths, no compatibility branches.
-- **Fail early and explicitly.** When a requirement is missing, stop at startup with a readable message, never continue into undefined behavior.
-- **Standard and portable.** ISO C99, CMake, Khronos components. No platform `#ifdef`s or platform branches in CMake.
-- **Self-contained build.** No Vulkan SDK, no package manager, no Git needed to build: CMake fetches and builds everything.
+- **Ultra simple.** Write the smallest code that does the job. Add an abstraction, option or helper only when code needs it. Prefer deletion to addition.
+- **Latest drivers.** Assume a current GPU and an up-to-date driver. Use Vulkan 1.4 and the newest extensions directly, with no fallback paths.
+- **Fail early and explicitly.** Stop at startup with a readable message when a requirement is missing. Never continue into undefined behavior. The validation layer is the one exception: it is a development aid, so ray continues without it.
+- **Portable.** Use ISO C99, CMake and Khronos components. Do not branch on the platform in code or CMake.
+- **Self-contained.** CMake fetches and builds every dependency. The build needs no Vulkan SDK, no package manager and no Git.
 
-## Language and code style
+## Code
 
-- **Strict C99** for the `ray` target only: `C_STANDARD 99`, `C_STANDARD_REQUIRED ON`, `C_EXTENSIONS OFF` (`-std=c99` on GCC/Clang; MSVC has no C99 switch). The code must pass a pedantic C99 check: no POSIX or compiler extensions.
-- **Formatting:** clang-format with Google style, `DerivePointerAlignment: false` (always `int* p`) and `InsertBraces: true` (braces on every control statement, stricter than Google).
-- **Naming (clang-tidy, warnings as errors):** functions and types `UpperCamelCase`; variables, parameters and struct fields `snake_case`; global/static constants and enum values `kName`; macros `UPPER_CASE` with the `RAY_` prefix. Also enforced: `TODO(owner):` format, no redundant boolean comparisons.
+- **Strict C99.** The `ray` target sets `C_STANDARD 99` with extensions off. The code must pass a pedantic C99 check. MSVC has no C99 switch, so CMake passes no flag there.
+- **Format.** clang-format uses Google style, left pointer alignment (`int* p`) and braces on every control statement. Files use LF line endings.
+- **Names.** clang-tidy enforces Google naming as errors: `UpperCamelCase` functions and types, `snake_case` variables and fields, `kName` constants and enum values, `RAY_` macros.
 - **No comments in code.**
-- **LF line endings everywhere** (`.gitattributes`).
-- **Errors:** `Check(result, "call")` exits on negative `VkResult`, printing its name via `string_VkResult` (Vulkan-Utility-Libraries). `Fail(message)` for everything else.
-- **Fixed-size arrays with explicit limits** instead of heap allocation (`kMaxImages`, GPU, queue family and extension lists), failing if a limit is exceeded.
-- **Commits:** atomic, Conventional Commits, subject line only.
+- **Errors.** `Check` stops on a negative `VkResult` and prints its name. `Fail` stops with a message.
+- **Limits.** Use fixed-size arrays with explicit limits, not heap allocation. Stop when a limit is too small.
+- **Commits.** Make atomic commits with a Conventional Commits subject line only.
 
 ## Build
 
-- **CMake 3.28+**, the minimum for `EXCLUDE_FROM_ALL` in `FetchContent_Declare`.
-- **All dependencies via FetchContent from GitHub tag archives** (`URL` + `URL_HASH SHA256`), not Git clones: about 23 MB instead of ~450 MB, configure about 3x faster, integrity checked. Bumping a version means updating its hash.
-- **Pinned versions:** every Khronos repository and volk at one tag, `RAY_VULKAN_TAG` (`vulkan-sdk-1.4.x`), so headers, tools and layers always match. GLFW pinned separately.
-- **FetchContent options:**
-  - `EXCLUDE_FROM_ALL`: only what a target needs gets built (no tests, tools or examples).
-  - `SYSTEM`: dependency headers produce no warnings and are ignored by clang-tidy.
-  - `OVERRIDE_FIND_PACKAGE`: only on packages other dependencies look up with `find_package`, so they resolve to the fetched copy and never to an installed SDK.
-- **One set of Vulkan headers:** `VOLK_PULL_IN_VULKAN OFF` and volk linked to the fetched `Vulkan::Headers`, so volk never picks up SDK or system headers.
-- **Build requirements:** CMake, Python 3 (code generation inside SPIRV-Tools, glslang and the validation layers) and a C/C++ compiler. Linux also needs the X11 and Wayland development packages for GLFW and the validation layers.
-- **First build cost:** most of it is the validation layers and SPIRV-Tools (about 36 CPU-minutes). Normal rebuilds only recompile ray.
-- **Windows paths:** MSVC's `cl.exe` and `link.exe` are not long-path aware even with long paths enabled in Windows, so keep the clone and build directories short.
-- `CMAKE_EXPORT_COMPILE_COMMANDS ON` so clang-tidy sees the real flags.
+- **CMake 3.28+.** It is the first version with `EXCLUDE_FROM_ALL` in `FetchContent_Declare`.
+- **Archives, not Git.** Each dependency comes from a GitHub tag archive with a SHA-256 hash. This downloads about 23 MB instead of about 450 MB and checks integrity. A version bump needs a new hash.
+- **One Vulkan version.** All Khronos repositories and volk use one tag, `RAY_VULKAN_TAG`. Headers, tools and layers then always match.
+- **FetchContent options.**
+  - `EXCLUDE_FROM_ALL` builds only what a target needs.
+  - `SYSTEM` hides warnings from dependency headers, also from clang-tidy.
+  - `OVERRIDE_FIND_PACKAGE` makes `find_package` find the fetched copy, never an installed SDK.
+- **One set of headers.** volk links the fetched `Vulkan::Headers` (`VOLK_PULL_IN_VULKAN OFF`).
+- **Requirements.** CMake, Python 3 and a C/C++ compiler. SPIRV-Tools, glslang and the validation layers generate code with Python. Linux also needs the X11 and Wayland development packages.
+- **Cost.** The first build spends most of its time on the validation layers and SPIRV-Tools (about 36 CPU-minutes). Later builds compile only ray.
+- **Short paths on Windows.** MSVC `cl.exe` and `link.exe` do not support long paths. Keep the clone and build directories short.
+- **Tooling.** CMake exports `compile_commands.json` for clang-tidy.
 
-## Running and validation
+## Run
 
-- **`cmake --build build --target run`** is the development entry point. It builds the validation layers (only this target does) and launches ray through `cmake -E env` with:
-  - `VK_ADD_LAYER_PATH` pointing at the freshly built layers, the portable alternative to setting environment variables from code;
-  - `VK_LOADER_DEBUG=error`, so the Vulkan loader names any missing layer or extension.
-- **Validation is requested when `NDEBUG` is not defined.** If the layer is not found (exe launched directly), ray says so and continues without it.
-- Messages go to the console; there is no debug messenger.
+- Use `cmake --build build --target run` during development. Only this target builds the validation layers. It starts ray through `cmake -E env` with two variables:
+  - `VK_ADD_LAYER_PATH` points the loader at the built layers. It replaces platform-specific code.
+  - `VK_LOADER_DEBUG=error` makes the Vulkan loader name a missing layer or extension.
+- ray enables validation when `NDEBUG` is not defined. Messages go to the console.
 
 ## Shaders
 
-- **GLSL**, Vulkan's native shading language, compiled at build time by the fetched glslang (`--target-env vulkan1.4`, SPIR-V 1.6).
-- **Embedded in the executable** as `uint32_t` arrays (`#include` of generated `.inc` files): no shader files to ship or load.
-- HLSL (needs DXC, a large LLVM build) and Slang (large) were rejected for now; switching would only change the compile command.
+- **GLSL**, Vulkan's native language. The fetched glslang compiles it at build time to SPIR-V 1.6 (`--target-env vulkan1.4`).
+- **Embedded.** ray stores the SPIR-V as `uint32_t` arrays. No shader files ship.
+- **Not HLSL or Slang.** HLSL needs DXC and Slang is large. A switch changes only the compile command.
 
-## Vulkan architecture
+## Vulkan
 
-- **volk** is a meta-loader in front of the real Vulkan loader (`vulkan-1.dll` / `libvulkan.so.1`): no link to `vulkan-1.lib` (so no SDK), all functions including extensions under their real names, device functions fetched with `vkGetDeviceProcAddr` so per-frame calls bypass the loader.
-- **GLFW** creates the window and the surface. It receives volk's `vkGetInstanceProcAddr` through `glfwInitVulkanLoader`, so the Vulkan loader is opened only once. `GLFW_INCLUDE_VULKAN` and `VK_NO_PROTOTYPES` are defined for the whole target, so include order never matters.
-- **Required:** Vulkan 1.4 (checked explicitly), `VK_KHR_swapchain`, `VK_KHR_swapchain_maintenance1`, and the instance extensions `VK_KHR_surface_maintenance1` and `VK_KHR_get_surface_capabilities2`.
-- **Core features used:** dynamic rendering (no render passes or framebuffers), synchronization2, extended dynamic state (viewport and scissor with count), maintenance5 (SPIR-V passed directly to the pipeline, no `VkShaderModule` objects).
-- **GPU:** the first discrete GPU, otherwise the first GPU. One queue from a family supporting graphics and presentation.
-- **Frame loop:** one frame in flight with one acquire semaphore, one render semaphore and two fences (last submit, last present). Each frame starts by waiting on both fences. On resize (GLFW framebuffer callback, out-of-date or suboptimal results) the swapchain is recreated and the old one destroyed immediately, because both fences prove the GPU and the presentation engine are done with it. No `vkDeviceWaitIdle`. A minimized window waits for events.
-- **Swapchain:** FIFO present mode (vsync, guaranteed everywhere, power-efficient), `minImageCount + 1` images, the first surface format, opaque composition. MAILBOX only if latency ever matters more than power.
-- **The window starts maximized.**
+- **volk** opens the Vulkan loader and loads every function pointer. ray needs no `vulkan-1.lib`, so no SDK. Device functions bypass the loader.
+- **GLFW** creates the window and the surface. It uses volk's `vkGetInstanceProcAddr` (`glfwInitVulkanLoader`), so ray opens the loader once. The target defines `GLFW_INCLUDE_VULKAN` and `VK_NO_PROTOTYPES`, so include order does not matter.
+- **Requirements.** Vulkan 1.4 (checked at startup), `VK_KHR_swapchain`, `VK_KHR_swapchain_maintenance1`, `VK_KHR_surface_maintenance1` and `VK_KHR_get_surface_capabilities2`.
+- **Features.** Dynamic rendering, synchronization2, extended dynamic state and maintenance5. With maintenance5, the pipeline takes SPIR-V directly and ray creates no shader modules.
+- **GPU.** ray uses the first discrete GPU, or else the first GPU. One queue does graphics and presentation.
+- **Frame loop.** One frame is in flight. Each frame starts with a wait on two fences: the last submit and the last present. After a resize, ray recreates the swapchain and destroys the old one at once, because the fences prove that nothing uses it. ray never calls `vkDeviceWaitIdle`. While the window is minimized, ray waits for events.
+- **Swapchain.** FIFO present mode (vsync, available everywhere, power-efficient), `minImageCount + 1` images, the first surface format and opaque composition.
+- **Window.** It opens maximized.
 
-## Decisions considered and rejected
+## Rejected
 
-| Option | Why not |
+| Option | Reason |
 |---|---|
-| Installing the Vulkan SDK | The most standard and minimal setup, but contradicts the self-contained build goal. |
-| Linking the loader directly | Requires the SDK's `vulkan-1.lib`. |
-| Hand-rolled function loading | One lookup line per function, growing with the engine; volk is two files. |
+| Vulkan SDK | The most standard setup, but the build must be self-contained. |
+| Linking the loader | Needs the SDK's `vulkan-1.lib`. |
+| Hand-written function loading | One line per function. volk is two files. |
 | vk-bootstrap | C++ only. |
-| Setting `VK_ADD_LAYER_PATH` in code | Needed `_putenv_s`/`setenv` platform branches and baked an absolute build path into the binary. |
-| `VK_EXT_shader_object` | Solves pipeline-combination explosions that a path tracer does not have: compute shaders carry no draw state, ray tracing shaders are not supported, materials live in data. |
-| Fallback paths for missing extensions | Contradict "latest drivers"; the swapchain_maintenance1 fallback was removed. |
-| EXT variants of promoted extensions | KHR only. |
-| Mozilla code style | Its formatting is Google plus mandatory braces (kept); Google naming is complete and fully enforceable by clang-tidy. |
+| Setting `VK_ADD_LAYER_PATH` in code | Needs platform branches and puts a build path in the binary. |
+| `VK_EXT_shader_object` | A path tracer has no pipeline explosion. Compute shaders have no draw state, and the extension does not support ray tracing shaders. |
+| Fallbacks for missing extensions | They contradict "latest drivers". |
+| EXT names of promoted extensions | Current drivers expose the KHR name. Both names need extra code for old drivers only. |
+| MAILBOX present mode | Uses more power. Use it only if latency matters more. |
+| Mozilla style | Google naming is complete, and clang-tidy enforces all of it. ray keeps the mandatory braces from Mozilla. |
 
-## Direction: ray/path tracing for games
+## Direction: path tracing
 
-- **Tracing:** `VK_KHR_ray_query` in compute shaders, over `VK_KHR_acceleration_structure` (bottom-level per mesh, top-level per scene). Needs buffer device address and descriptor indexing (core). The ray tracing pipeline only if specialized hit shaders become necessary.
-- **First milestone:** a ray-traced triangle. One compute shader traces one ray per pixel into a storage image, which is copied to the swapchain image. The window, swapchain, synchronization and resize handling stay.
-- **Scenes:** glTF meshes loaded with cgltf (single-file C99). PBR (metallic-roughness) evaluated in one shader: hit data from barycentrics and vertex buffers, materials as data, textures in one bindless array.
-- **Transparency:** cutout and stochastic alpha in the ray query candidate loop; glass and water as a BSDF (Fresnel, Snell, Beer-Lambert absorption; glTF transmission, IOR and volume); thin translucency as diffuse transmission; subsurface scattering as a random walk or an approximation. Shadow rays may pass tinted through thin glass as a real-time compromise.
-- **Real time:** temporal accumulation, denoising (SVGF or ReSTIR-style sampling) and upscaling are where most of the work will be.
-- **Dense geometry:** meshlet-style clusters map to cluster acceleration structures (`VK_NV_cluster_acceleration_structure`), NVIDIA-only at the time of writing. Rasterization (mesh shaders into a visibility buffer) only if a hybrid pass is ever needed, kept to a handful of pipelines.
+- **Tracing.** Use `VK_KHR_ray_query` in compute shaders over `VK_KHR_acceleration_structure`: one bottom-level structure per mesh, one top-level structure per scene. Both need buffer device address and descriptor indexing. Add the ray tracing pipeline only if hit shaders must differ.
+- **First step.** Trace a triangle. A compute shader traces one ray per pixel into a storage image, and ray copies the image to the swapchain.
+- **Scenes.** Load glTF with cgltf (single-file C99). Evaluate PBR in one shader. Materials are data, and all textures sit in one bindless array.
+- **Transparency.** Handle cutout and partial alpha in the ray query candidate loop. Treat glass and water as a BSDF with Fresnel, refraction and absorption. Use diffuse transmission for thin surfaces and a random walk for subsurface scattering.
+- **Real time.** Most of the work is temporal accumulation, denoising and upscaling.
+- **Dense geometry.** Clusters (meshlets) map to `VK_NV_cluster_acceleration_structure`, NVIDIA-only at the time of writing. Rasterize only for a hybrid pass, with few pipelines.
 
-## Known limitations
+## Limitations
 
-- Tested only on Windows with MSVC and Ninja. Linux is untested.
-- macOS is not supported: MoltenVK cannot reasonably be fetched with CMake, and the portability enumeration setup is absent.
+- Tested only on Windows with MSVC and Ninja. Linux is not tested.
+- macOS does not work. CMake cannot reasonably fetch MoltenVK, and the code has no portability setup.
 - Validation runs only through the `run` target.
-- The image stretches with the window (no aspect-ratio correction).
-- Dependency hashes rely on GitHub keeping tag archives byte-identical.
+- The image stretches with the window.
+- The hashes depend on GitHub archives staying byte-identical.
