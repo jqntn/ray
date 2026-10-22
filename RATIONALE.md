@@ -37,10 +37,10 @@ ray is a minimal Vulkan engine in plain C. Its goal is a ray/path traced engine 
 
 ## Run
 
-- Use `cmake --build build --target run` during development. Only this target builds the validation layers. It starts ray through `cmake -E env` with two variables:
-  - `VK_ADD_LAYER_PATH` points the loader at the built layers. It replaces platform-specific code.
-  - `VK_LOADER_DEBUG=error` makes the Vulkan loader name a missing layer or extension.
-- ray enables validation when `NDEBUG` is not defined. Messages go to the console.
+- Use `cmake --build build --target run` during development. Only this target builds the validation layers. It starts ray through `cmake -E env` with `VK_ADD_LAYER_PATH`, which points the loader at the built layers. This replaces platform-specific code.
+- ray enables validation when `NDEBUG` is not defined.
+- A debug messenger is active in every build, however ray starts. It prints loader and validation errors. Its settings are also chained into `vkCreateInstance`, so it catches a missing layer or extension.
+- After a validation error, ray stops at the start of the next frame. Do not exit inside the callback, because the process can hang in the driver.
 
 ## Shaders
 
@@ -52,7 +52,7 @@ ray is a minimal Vulkan engine in plain C. Its goal is a ray/path traced engine 
 
 - **volk** opens the Vulkan loader and loads every function pointer. ray needs no `vulkan-1.lib`, so no SDK. Device functions bypass the loader.
 - **GLFW** creates the window and the surface. It uses volk's `vkGetInstanceProcAddr` (`glfwInitVulkanLoader`), so ray opens the loader once. The target defines `GLFW_INCLUDE_VULKAN` and `VK_NO_PROTOTYPES`, so include order does not matter.
-- **Requirements.** Vulkan 1.4 (checked at startup), `VK_KHR_swapchain`, `VK_KHR_swapchain_maintenance1`, `VK_KHR_surface_maintenance1` and `VK_KHR_get_surface_capabilities2`.
+- **Requirements.** Vulkan 1.4 (checked at startup), `VK_KHR_swapchain`, `VK_KHR_swapchain_maintenance1`, `VK_KHR_surface_maintenance1`, `VK_KHR_get_surface_capabilities2` and `VK_EXT_debug_utils`.
 - **Features.** Dynamic rendering, synchronization2, extended dynamic state and maintenance5. With maintenance5, the pipeline takes SPIR-V directly and ray creates no shader modules.
 - **GPU.** ray uses the first discrete GPU, or else the first GPU. One queue does graphics and presentation.
 - **Frame loop.** One frame is in flight. Each frame starts with a wait on two fences: the last submit and the last present. After a resize, ray recreates the swapchain and destroys the old one at once, because the fences prove that nothing uses it. ray never calls `vkDeviceWaitIdle`. While the window is minimized, ray waits for events.
@@ -82,7 +82,7 @@ These options are not rejected. Each waits for its trigger. Direction and Limita
 | MAILBOX present mode | Latency matters more than power. MAILBOX renders frames that the screen never shows, and not every platform has it. |
 | More than one frame in flight | The CPU waits idle on GPU work. |
 | More swapchain_maintenance1 features | ray needs a vsync toggle, scaling during a resize or swapchain memory on first use. |
-| Debug messenger (`VK_EXT_debug_utils`) | You need breakpoints on validation errors or object names in tools. |
+| Object names and command labels (`VK_EXT_debug_utils`) | ray has many resources and passes, for example in the path tracer. |
 | Validation in the IDE debugger | You debug in an IDE. Today only the `run` target enables validation. |
 | `CMAKE_INTERMEDIATE_DIR_STRATEGY SHORT` | A build hits the Windows path limit again. |
 | GPU choice by Vulkan 1.4 support | A discrete GPU without Vulkan 1.4 hides an integrated GPU with it. |

@@ -39,6 +39,17 @@ static void OnFramebufferSize(GLFWwindow* window, int width, int height) {
   *(int*)glfwGetWindowUserPointer(window) = 1;
 }
 
+static VKAPI_ATTR VkBool32 VKAPI_CALL OnDebugMessage(
+    VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    VkDebugUtilsMessageTypeFlagsEXT type,
+    const VkDebugUtilsMessengerCallbackDataEXT* data, void* user_data) {
+  fprintf(stderr, "%s\n", data->pMessage);
+  if (type & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
+    *(int*)user_data = 1;
+  }
+  return VK_FALSE;
+}
+
 static VkPipeline CreatePipeline(VkDevice device, VkPipelineLayout layout,
                                  VkFormat format) {
   VkPipelineShaderStageCreateInfo stages[] = {
@@ -247,7 +258,7 @@ int main(void) {
   glfwSetFramebufferSizeCallback(window, OnFramebufferSize);
 
   const char* instance_extensions[16];
-  if (extension_count > 14) {
+  if (extension_count > 13) {
     Fail("too many instance extensions");
   }
   for (uint32_t i = 0; i < extension_count; ++i) {
@@ -257,9 +268,20 @@ int main(void) {
       VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME;
   instance_extensions[extension_count++] =
       VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME;
+  instance_extensions[extension_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 
+  int validation_error = 0;
+  VkDebugUtilsMessengerCreateInfoEXT messenger_info = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+      .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+      .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+      .pfnUserCallback = OnDebugMessage,
+      .pUserData = &validation_error,
+  };
   VkInstanceCreateInfo instance_info = {
       .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+      .pNext = &messenger_info,
       .pApplicationInfo =
           &(VkApplicationInfo){
               .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -282,6 +304,10 @@ int main(void) {
   }
   Check(result, "vkCreateInstance");
   volkLoadInstance(instance);
+  VkDebugUtilsMessengerEXT messenger;
+  Check(vkCreateDebugUtilsMessengerEXT(instance, &messenger_info, NULL,
+                                       &messenger),
+        "vkCreateDebugUtilsMessengerEXT");
 
   VkSurfaceKHR surface;
   Check(glfwCreateWindowSurface(instance, window, NULL, &surface),
@@ -431,6 +457,9 @@ int main(void) {
   VkFence fences[] = {submitted, presented};
 
   while (!glfwWindowShouldClose(window)) {
+    if (validation_error) {
+      Fail("validation error");
+    }
     glfwPollEvents();
     glfwGetFramebufferSize(window, &width, &height);
     if (width == 0 || height == 0) {
@@ -557,6 +586,7 @@ int main(void) {
   vkDestroyPipelineLayout(device, layout, NULL);
   vkDestroyDevice(device, NULL);
   vkDestroySurfaceKHR(instance, surface, NULL);
+  vkDestroyDebugUtilsMessengerEXT(instance, messenger, NULL);
   vkDestroyInstance(instance, NULL);
   glfwDestroyWindow(window);
   glfwTerminate();
