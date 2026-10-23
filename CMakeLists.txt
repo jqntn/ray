@@ -63,11 +63,11 @@ target_include_directories(ray PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(ray PRIVATE glfw volk Vulkan::UtilityHeaders)
 
 add_custom_target(
-  run
+  run-vvl
   COMMAND ${CMAKE_COMMAND} -E env VK_ADD_LAYER_PATH=$<TARGET_FILE_DIR:vvl>
           VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation $<TARGET_FILE:ray>
   USES_TERMINAL)
-add_dependencies(run ray vvl)
+add_dependencies(run-vvl ray vvl)
 
 foreach(shader triangle.vert triangle.frag)
   add_custom_command(
