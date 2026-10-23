@@ -1,0 +1,27 @@
+name: build
+
+on: [push, pull_request]
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: pipx run --spec clang-format==22.1.3 clang-format --dry-run --Werror src/*.c
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev xorg-dev
+      - if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+      - run: cmake -B build -G Ninja
+      - run: cmake --build build
+      - if: runner.os == 'Linux'
+        run: pipx run --spec clang-tidy==22.1.8 clang-tidy -p build src/*.c
