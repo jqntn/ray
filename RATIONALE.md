@@ -40,7 +40,7 @@ ray is a minimal Vulkan engine in plain C. Its goal is a ray/path traced engine 
 - Use `cmake --build build --target run` during development. Only this target builds the validation layers. It starts ray through `cmake -E env` with `VK_ADD_LAYER_PATH`, which points the loader at the built layers. This replaces platform-specific code.
 - ray enables validation when `NDEBUG` is not defined.
 - A debug messenger is active in every build, however ray starts. It prints loader and validation errors. Its settings are also chained into `vkCreateInstance`, so it catches a missing layer or extension.
-- After a validation error, ray stops at the start of the next frame. Do not exit inside the callback, because the process can hang in the driver.
+- After a validation error, ray stops at the start of the next frame. An error in the last frame or during teardown makes ray fail at exit. Do not exit inside the callback, because the process can hang in the driver.
 
 ## Shaders
 

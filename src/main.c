@@ -597,5 +597,8 @@ int main(void) {
   vkDestroyInstance(instance, NULL);
   glfwDestroyWindow(window);
   glfwTerminate();
+  if (validation_error) {
+    Fail("validation error");
+  }
   return 0;
 }
