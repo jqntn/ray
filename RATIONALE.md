@@ -16,8 +16,8 @@ ray is a minimal Vulkan engine in plain C. Its goal is a ray/path traced engine 
 - **Format.** clang-format uses Google style, left pointer alignment (`int* p`) and braces on every control statement. Files use LF line endings.
 - **Names.** clang-tidy enforces Google naming as errors: `UpperCamelCase` functions and types, `snake_case` variables and fields, `kName` constants and enum values, `RAY_` macros.
 - **No comments in code.**
-- **Errors.** `Check` stops on a negative `VkResult` and prints its name. `Fail` stops with a message.
-- **Limits.** Use fixed-size arrays with explicit limits, not heap allocation. Stop when a limit is too small.
+- **Errors.** `Check` stops on a negative `VkResult` and prints its name. `Fail` stops with a message. `Allocate` stops when `malloc` fails.
+- **Limits.** Use fixed-size arrays with explicit limits, not heap allocation. Stop when a limit is too small. Exception: lists that Vulkan enumerates (physical devices, queue families, swapchain images) use the usual two-call pattern and a heap array of the reported size.
 - **Commits.** Make atomic commits with a Conventional Commits subject line only.
 
 ## Build

@@ -7,14 +7,12 @@
 
 #define RAY_COUNT(array) ((uint32_t)(sizeof(array) / sizeof((array)[0])))
 
-enum { kMaxImages = 8 };
-
 typedef struct Swapchain {
   VkSwapchainKHR handle;
   VkExtent2D extent;
   uint32_t image_count;
-  VkImage images[kMaxImages];
-  VkImageView views[kMaxImages];
+  VkImage* images;
+  VkImageView* views;
 } Swapchain;
 
 static const uint32_t kTriangleVert[] = {
@@ -35,6 +33,14 @@ static void Check(VkResult result, const char* call) {
     fprintf(stderr, "%s failed: %s\n", call, string_VkResult(result));
     exit(EXIT_FAILURE);
   }
+}
+
+static void* Allocate(size_t size) {
+  void* memory = malloc(size);
+  if (!memory) {
+    Fail("out of memory");
+  }
+  return memory;
 }
 
 static void OnFramebufferSize(GLFWwindow* window, int width, int height) {
@@ -147,6 +153,8 @@ static void DestroySwapchain(VkDevice device, const Swapchain* swapchain) {
     vkDestroyImageView(device, swapchain->views[i], NULL);
   }
   vkDestroySwapchainKHR(device, swapchain->handle, NULL);
+  free(swapchain->views);
+  free(swapchain->images);
 }
 
 static void CreateSwapchain(VkPhysicalDevice gpu, VkDevice device,
@@ -185,9 +193,10 @@ static void CreateSwapchain(VkPhysicalDevice gpu, VkDevice device,
   Check(vkGetSwapchainImagesKHR(device, swapchain->handle,
                                 &swapchain->image_count, NULL),
         "vkGetSwapchainImagesKHR");
-  if (swapchain->image_count > kMaxImages) {
-    Fail("too many swapchain images");
-  }
+  swapchain->images =
+      Allocate(swapchain->image_count * sizeof(*swapchain->images));
+  swapchain->views =
+      Allocate(swapchain->image_count * sizeof(*swapchain->views));
   Check(vkGetSwapchainImagesKHR(device, swapchain->handle,
                                 &swapchain->image_count, swapchain->images),
         "vkGetSwapchainImagesKHR");
@@ -319,16 +328,15 @@ int main(void) {
   Check(glfwCreateWindowSurface(instance, window, NULL, &surface),
         "glfwCreateWindowSurface");
 
-  VkPhysicalDevice gpus[16];
-  uint32_t gpu_count = RAY_COUNT(gpus);
-  result = vkEnumeratePhysicalDevices(instance, &gpu_count, gpus);
-  Check(result, "vkEnumeratePhysicalDevices");
-  if (result == VK_INCOMPLETE) {
-    Fail("too many vulkan devices");
-  }
+  uint32_t gpu_count = 0;
+  Check(vkEnumeratePhysicalDevices(instance, &gpu_count, NULL),
+        "vkEnumeratePhysicalDevices");
   if (gpu_count == 0) {
     Fail("no vulkan device");
   }
+  VkPhysicalDevice* gpus = Allocate(gpu_count * sizeof(*gpus));
+  Check(vkEnumeratePhysicalDevices(instance, &gpu_count, gpus),
+        "vkEnumeratePhysicalDevices");
   VkPhysicalDevice gpu = gpus[0];
   VkPhysicalDeviceProperties properties;
   for (uint32_t i = 0; i < gpu_count; ++i) {
@@ -338,18 +346,17 @@ int main(void) {
       break;
     }
   }
+  free(gpus);
   vkGetPhysicalDeviceProperties(gpu, &properties);
   if (properties.apiVersion < VK_API_VERSION_1_4) {
     Fail("vulkan 1.4 required");
   }
   printf("%s\n", properties.deviceName);
 
-  VkQueueFamilyProperties families[32];
   uint32_t family_count = 0;
   vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, NULL);
-  if (family_count > RAY_COUNT(families)) {
-    Fail("too many queue families");
-  }
+  VkQueueFamilyProperties* families =
+      Allocate(family_count * sizeof(*families));
   vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
   uint32_t family = UINT32_MAX;
   for (uint32_t i = 0; i < family_count && family == UINT32_MAX; ++i) {
@@ -360,6 +367,7 @@ int main(void) {
       family = i;
     }
   }
+  free(families);
   if (family == UINT32_MAX) {
     Fail("no graphics queue with present support");
   }
