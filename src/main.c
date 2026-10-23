@@ -273,11 +273,9 @@ int main(void) {
       VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
       VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
   };
-  const char* instance_extensions[RAY_COUNT(ray_extensions) + 16];
-  if (extension_count >
-      RAY_COUNT(instance_extensions) - RAY_COUNT(ray_extensions)) {
-    Fail("too many instance extensions");
-  }
+  const char** instance_extensions =
+      Allocate((RAY_COUNT(ray_extensions) + extension_count) *
+               sizeof(*instance_extensions));
   uint32_t instance_extension_count = 0;
   for (uint32_t i = 0; i < RAY_COUNT(ray_extensions); ++i) {
     instance_extensions[instance_extension_count++] = ray_extensions[i];
@@ -319,6 +317,7 @@ int main(void) {
     result = vkCreateInstance(&instance_info, NULL, &instance);
   }
   Check(result, "vkCreateInstance");
+  free(instance_extensions);
   volkLoadInstance(instance);
   VkDebugUtilsMessengerEXT messenger;
   Check(vkCreateDebugUtilsMessengerEXT(instance, &messenger_info, NULL,
