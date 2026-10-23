@@ -345,7 +345,11 @@ int main(void) {
   printf("%s\n", properties.deviceName);
 
   VkQueueFamilyProperties families[32];
-  uint32_t family_count = RAY_COUNT(families);
+  uint32_t family_count = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, NULL);
+  if (family_count > RAY_COUNT(families)) {
+    Fail("too many queue families");
+  }
   vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
   uint32_t family = UINT32_MAX;
   for (uint32_t i = 0; i < family_count && family == UINT32_MAX; ++i) {
