@@ -268,18 +268,19 @@ int main(void) {
   glfwSetWindowUserPointer(window, &recreate);
   glfwSetFramebufferSizeCallback(window, OnFramebufferSize);
 
-  const char* instance_extensions[16] = {
+  const char* ray_extensions[] = {
       VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME,
       VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
       VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
   };
-  uint32_t instance_extension_count = 0;
-  while (instance_extensions[instance_extension_count]) {
-    ++instance_extension_count;
-  }
-  if (instance_extension_count + extension_count >
-      RAY_COUNT(instance_extensions)) {
+  const char* instance_extensions[RAY_COUNT(ray_extensions) + 16];
+  if (extension_count >
+      RAY_COUNT(instance_extensions) - RAY_COUNT(ray_extensions)) {
     Fail("too many instance extensions");
+  }
+  uint32_t instance_extension_count = 0;
+  for (uint32_t i = 0; i < RAY_COUNT(ray_extensions); ++i) {
+    instance_extensions[instance_extension_count++] = ray_extensions[i];
   }
   for (uint32_t i = 0; i < extension_count; ++i) {
     instance_extensions[instance_extension_count++] = extensions[i];
