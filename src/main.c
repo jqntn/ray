@@ -321,8 +321,11 @@ int main(void) {
 
   VkPhysicalDevice gpus[16];
   uint32_t gpu_count = RAY_COUNT(gpus);
-  Check(vkEnumeratePhysicalDevices(instance, &gpu_count, gpus),
-        "vkEnumeratePhysicalDevices");
+  result = vkEnumeratePhysicalDevices(instance, &gpu_count, gpus);
+  Check(result, "vkEnumeratePhysicalDevices");
+  if (result == VK_INCOMPLETE) {
+    Fail("too many vulkan devices");
+  }
   if (gpu_count == 0) {
     Fail("no vulkan device");
   }
