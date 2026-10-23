@@ -56,7 +56,7 @@ ray is a minimal Vulkan engine in plain C. Its goal is a ray/path traced engine 
 - **Features.** Dynamic rendering, synchronization2, extended dynamic state and maintenance5. With maintenance5, the pipeline takes SPIR-V directly and ray creates no shader modules.
 - **GPU.** ray uses the first discrete GPU, or else the first GPU. One queue does graphics and presentation.
 - **Frame loop.** One frame is in flight. Each frame starts with a wait on two fences: the last submit and the last present. After a resize, ray recreates the swapchain and destroys the old one at once, because the fences prove that nothing uses it. ray never calls `vkDeviceWaitIdle`. While the window is minimized, ray waits for events.
-- **Swapchain.** FIFO present mode (vsync, available everywhere, power-efficient), `minImageCount + 1` images, the first surface format and opaque composition.
+- **Swapchain.** FIFO present mode (vsync, available everywhere, power-efficient), `minImageCount + 1` images, the first surface format and opaque composition. The presentation engine keeps `minImageCount` images, so the spare one lets an acquire return at once. The image count is independent of the frames in flight.
 - **Window.** It opens maximized.
 
 ## Rejected
@@ -80,7 +80,7 @@ These options are not rejected. Each waits for its trigger. Direction and Limita
 | Option | Trigger |
 |---|---|
 | MAILBOX present mode | Latency matters more than power. MAILBOX renders frames that the screen never shows, and not every platform has it. |
-| More than one frame in flight | The CPU waits idle on GPU work. |
+| Two frames in flight | The CPU waits idle on GPU work, for example once TLAS updates and uploads run every frame. A GPU timestamp profile shows the gap. |
 | More swapchain_maintenance1 features | ray needs a vsync toggle, scaling during a resize or swapchain memory on first use. |
 | Object names and command labels (`VK_EXT_debug_utils`) | ray has many resources and passes, for example in the path tracer. |
 | Validation in the IDE debugger | You debug in an IDE. Today only the `run` target enables validation. |
@@ -90,7 +90,10 @@ These options are not rejected. Each waits for its trigger. Direction and Limita
 ## Direction: path tracing
 
 - **Tracing.** Use `VK_KHR_ray_query` in compute shaders over `VK_KHR_acceleration_structure`: one bottom-level structure per mesh, one top-level structure per scene. Both need buffer device address and descriptor indexing. Add the ray tracing pipeline only if hit shaders must differ.
-- **First step.** Trace a triangle. A compute shader traces one ray per pixel into a storage image, and ray copies the image to the swapchain.
+- **First step.** Trace a triangle. A compute shader traces one ray per pixel into a storage image, and a tonemap pass writes the image to the swapchain.
+- **Frame.** Tracing writes ray's own HDR images: accumulation, history and denoiser input. Only the last pass touches the swapchain: a fullscreen triangle tonemaps into it with the graphics pipeline. This also avoids storage usage on the swapchain format, which drivers do not guarantee. ray acquires the swapchain image just before that pass, and only that pass waits on the acquire semaphore, so tracing never waits for the display.
+- **Present.** FIFO stays. A path tracer usually runs below the refresh rate, so MAILBOX gains nothing. To converge faster while the camera is still, run several sample passes per presented frame within a time budget. Measure with GPU timestamps (`vkCmdWriteTimestamp2`), not the frame rate.
+- **Frames in flight.** Two when the trigger in Deferred fires, not three: a third adds latency and no throughput while the GPU is the bottleneck. Only what the CPU writes or tracks per frame doubles: the command buffer, the camera and TLAS instance uploads, the acquire semaphore and the fences. GPU-only images (accumulation, history, reservoirs) stay single, because one queue already runs frames in order. Index per-frame resources by frame slot, never by swapchain image index. A timeline semaphore can replace the submit fences.
 - **Scenes.** Load glTF with cgltf (single-file C99). Evaluate PBR in one shader. Materials are data, and all textures sit in one bindless array.
 - **Transparency.** Handle cutout and partial alpha in the ray query candidate loop. Treat glass and water as a BSDF with Fresnel, refraction and absorption. Use diffuse transmission for thin surfaces and a random walk for subsurface scattering.
 - **Real time.** Most of the work is temporal accumulation, denoising and upscaling.
