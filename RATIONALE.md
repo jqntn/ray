@@ -33,7 +33,7 @@ ray is a minimal Vulkan engine in plain C. Its goal is a ray/path traced engine 
 - **Requirements.** CMake, Python 3 and a C/C++ compiler. SPIRV-Tools, glslang and the validation layers generate code with Python. Linux also needs the X11 and Wayland development packages.
 - **Cost.** The first build spends most of its time on the validation layers and SPIRV-Tools (about 36 CPU-minutes). Later builds compile only ray.
 - **Short paths on Windows.** MSVC `cl.exe` and `link.exe` do not support long paths. Keep the clone and build directories short.
-- **Tooling.** CMake exports `compile_commands.json` for clang-tidy.
+- **Tooling.** CMake exports `compile_commands.json` for clang-tidy. clang-tidy also rejects `RAY_COUNT` on a pointer (`bugprone-sizeof-expression`).
 
 ## Run
 
