@@ -65,7 +65,7 @@ target_link_libraries(ray PRIVATE glfw volk Vulkan::UtilityHeaders)
 add_custom_target(
   run
   COMMAND ${CMAKE_COMMAND} -E env VK_ADD_LAYER_PATH=$<TARGET_FILE_DIR:vvl>
-          $<TARGET_FILE:ray>
+          VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation $<TARGET_FILE:ray>
   USES_TERMINAL)
 add_dependencies(run ray vvl)
 

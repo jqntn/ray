@@ -304,18 +304,8 @@ int main(void) {
       .enabledExtensionCount = instance_extension_count,
       .ppEnabledExtensionNames = instance_extensions,
   };
-#ifndef NDEBUG
-  const char* layer = "VK_LAYER_KHRONOS_validation";
-  instance_info.enabledLayerCount = 1;
-  instance_info.ppEnabledLayerNames = &layer;
-#endif
   VkInstance instance;
   VkResult result = vkCreateInstance(&instance_info, NULL, &instance);
-  if (result == VK_ERROR_LAYER_NOT_PRESENT) {
-    fprintf(stderr, "validation layer not found\n");
-    instance_info.enabledLayerCount = 0;
-    result = vkCreateInstance(&instance_info, NULL, &instance);
-  }
   Check(result, "vkCreateInstance");
   free(instance_extensions);
   volkLoadInstance(instance);
